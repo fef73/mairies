@@ -92,6 +92,10 @@
     .sheet-wrap{max-width:none;box-shadow:none;width:210mm !important;height:297mm !important;overflow:hidden;break-inside:avoid;}
     .sheet{transform:none !important;}
   }
+  .page-foot{max-width:1200px;margin:28px auto 0;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-lo);line-height:1.8;}
+  .page-foot .sig{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:6px;}
+  .page-foot .sig img{width:26px;height:26px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1px var(--hairline);}
+  @media print{.page-foot{display:none;}}
 </style>
 </head>
 <body>
@@ -132,6 +136,10 @@
   <div class="preview">
     <div class="sheet-wrap" id="wrap"><div class="empty" id="empty">Choisissez une commune puis « Générer ».<br>Calcul sur les données ERA5 depuis 1950.</div></div>
   </div>
+</div>
+<div class="page-foot">
+  <div class="sig"><img src="logo-fef73.jpg" alt="fef73" width="26" height="26"><span>Créé par fef73 avec claude.ai · 3 octobre 2026</span></div>
+  <div style="opacity:.6;">© 2026 Fernand (fef73) — Tous droits réservés</div>
 </div>
 <script>
 const $ = id => document.getElementById(id);
