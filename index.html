@@ -58,6 +58,7 @@
   .sh-head h2{font-family:'Fraunces',serif;font-size:38px;line-height:1.05;margin:3px 0 5px;font-weight:600;color:var(--ink);}
   .meta{font-size:12.5px;color:var(--mute);}
   .sh-sec h3{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ac);margin:0 0 6px;font-weight:500;display:flex;gap:8px;align-items:center;}
+  .sh-sec h3{white-space:nowrap;}
   .sh-sec h3::after{content:"";flex:1;height:1px;background:var(--line);}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:6px;}
   .kpi{background:var(--ac-soft);border-radius:8px;padding:7px 10px;}
@@ -328,7 +329,7 @@ function render(p, R, alt, o) {
     <div class="sh-head">${logoData ? `<img class="logo" src="${logoData}" alt="">` : ''}
       <div class="tt"><div class="kicker">Fiche climat</div><h2>${esc(p.name)}</h2>
       <div class="meta">${esc([place, `altitude ${fr(alt, 0)} m`, p.population ? `${fr(p.population, 0)} habitants` : null].filter(Boolean).join(' · '))}</div></div></div>
-    <div class="sh-sec"><h3>Le climat en un coup d'œil <span style="letter-spacing:0;text-transform:none;color:#5d6b79">· normales 1991–2020</span></h3>
+    <div class="sh-sec"><h3>Le climat en un coup d'œil <span style="letter-spacing:0;text-transform:none;color:#5d6b79;font-family:'Space Grotesk',sans-serif;font-size:10.5px;white-space:nowrap">· normales 1991–2020 (c'est la moyenne de chaque mois sur les 30 années de 1991 à 2020)</span></h3>
       ${climogram(R, o.color, o.ski)}
       <div class="kpis">
         <div class="kpi"><b>${fr(R.annT)} °C</b><span>température moyenne</span></div>
