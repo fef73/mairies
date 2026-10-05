@@ -162,14 +162,14 @@ async function getJSON(url) { const r = await fetch(url); if (!r.ok) throw new E
 async function fetchAll(p, elev) {
   const endD = new Date(Date.now() - 6 * 86400000), end = endD.toISOString().slice(0, 10);
   const ranges = [['1950-01-01', '1974-12-31'], ['1975-01-01', '1999-12-31'], ['2000-01-01', end]];
-  const vars = 'temperature_2m_max,temperature_2m_min,precipitation_sum,snowfall_sum,sunshine_duration';
+  const vars = 'temperature_2m_max,temperature_2m_min,precipitation_sum,snowfall_sum,sunshine_duration,wind_gusts_10m_max';
   const parts = await Promise.all(ranges.map(([a, b]) =>
     getJSON(`https://archive-api.open-meteo.com/v1/archive?latitude=${p.lat}&longitude=${p.lon}&start_date=${a}&end_date=${b}&daily=${vars}&timezone=auto${elev != null ? '&elevation=' + elev : ''}`)));
-  const out = { time: [], tx: [], tn: [], pr: [], sn: [], su: [], elevation: parts[0].elevation };
+  const out = { time: [], tx: [], tn: [], pr: [], sn: [], su: [], wg: [], elevation: parts[0].elevation };
   for (const j of parts) {
     const d = j.daily; if (!d || !d.time) throw new Error('vide');
     out.time.push(...d.time); out.tx.push(...d.temperature_2m_max); out.tn.push(...d.temperature_2m_min);
-    out.pr.push(...d.precipitation_sum); out.sn.push(...d.snowfall_sum); out.su.push(...d.sunshine_duration);
+    out.pr.push(...d.precipitation_sum); out.sn.push(...d.snowfall_sum); out.su.push(...d.sunshine_duration); out.wg.push(...(d.wind_gusts_10m_max || []));
   }
   return out;
 }
@@ -230,7 +230,8 @@ function analyse(D) {
     ['Jours chauds (max ≥ 30 °C)', i => ok(D.tx[i]) && D.tx[i] >= 30],
     ['Jours de gel (min < 0 °C)', i => ok(D.tn[i]) && D.tn[i] < 0],
     ['Forte pluie (≥ 20 mm en 24 h)', i => ok(D.pr[i]) && D.pr[i] >= 20],
-    ['Jours de neige (≥ 1 cm)', i => ok(D.sn[i]) && D.sn[i] >= 1]
+    ['Jours de neige (≥ 1 cm)', i => ok(D.sn[i]) && D.sn[i] >= 1],
+    ['Vent fort (rafales ≥ 58 km/h)', i => ok(D.wg[i]) && D.wg[i] >= 57.6]
   ];
   R.periods = periods;
 
