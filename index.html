@@ -47,7 +47,9 @@
   /* ===== La fiche A4 (794 x 1122 px) ===== */
   .sheet{--ac:#1d4e7a;--ac-soft:#e8eff6;--ink:#1c2733;--mute:#5d6b79;--line:#d9e0e7;
     width:794px;height:1122px;background:#fff;color:var(--ink);font-family:'Space Grotesk',sans-serif;padding:34px 40px 26px;
-    display:flex;flex-direction:column;gap:13px;transform-origin:top left;position:relative;}
+    transform-origin:top left;position:relative;overflow:hidden;}
+  .sh-in{display:flex;flex-direction:column;gap:13px;transform-origin:top left;}
+  .sh-in svg{display:block;width:100%;height:auto;}
   .sheet *{box-sizing:border-box;}
   .sh-head{display:flex;align-items:center;gap:18px;border-bottom:3px solid var(--ac);padding-bottom:12px;}
   .sh-head .logo{height:74px;max-width:130px;object-fit:contain;flex:none;}
@@ -322,7 +324,7 @@ function render(p, R, alt, o) {
   sheet.id = 'sheet'; sheet.className = 'sheet'; sheet.style.setProperty('--ac', o.color);
   sheet.style.setProperty('--ac-soft', o.color + '14');
   const place = [p.admin2 || p.admin1, p.admin2 ? p.admin1 : null].filter(Boolean).join(' · ');
-  sheet.innerHTML = `
+  sheet.innerHTML = `<div class="sh-in">
     <div class="sh-head">${logoData ? `<img class="logo" src="${logoData}" alt="">` : ''}
       <div class="tt"><div class="kicker">Fiche climat</div><h2>${esc(p.name)}</h2>
       <div class="meta">${esc([place, `altitude ${fr(alt, 0)} m`, p.population ? `${fr(p.population, 0)} habitants` : null].filter(Boolean).join(' · '))}</div></div></div>
@@ -356,24 +358,30 @@ function render(p, R, alt, o) {
     <div class="sh-sec"><h3>Repères locaux</h3><div class="local"><ul>${L.map(x => `<li>${x}</li>`).join('')}</ul></div></div>
     ${tourBlock}
     <div class="sh-foot"><div>Sources : réanalyse ERA5 (Copernicus / ECMWF) via Open-Meteo, ${yrs} ; normales 1991–2020. Valeurs modélisées au point ${fr(p.lat, 3)}° N, ${fr(p.lon, 3)}° E à ${fr(alt, 0)} m : elles peuvent différer des mesures d'une station. Mise à jour du ${new Date().toLocaleDateString('fr-FR')}.</div>
-      <div class="r">${o.mention ? `<div class="mention">${esc(o.mention)}</div>` : ''}Document informatif : ne remplace pas la vigilance Météo-France.<br>© ${new Date().getFullYear()} fef73</div></div>`;
+      <div class="r">${o.mention ? `<div class="mention">${esc(o.mention)}</div>` : ''}Document informatif : ne remplace pas la vigilance Météo-France.<br>© ${new Date().getFullYear()} fef73</div></div></div>`;
   const wrap = $('wrap'); $('empty') && $('empty').remove(); if (!sheet.parentNode) wrap.appendChild(sheet);
   squeeze(); fit();
+  document.fonts && document.fonts.ready.then(() => { squeeze(); fit(); });
 }
 function fit() {
   const wrap = $('wrap'), s = $('sheet'); if (!s) return;
   const k = Math.min(1, wrap.clientWidth / 794);
   s.style.transform = `scale(${k})`; wrap.style.height = Math.round(1122 * k) + 'px';
 }
-// si le contenu déborde de la page, on resserre les espacements
+// fait tenir le contenu sur la page : on resserre, puis on réduit l'ensemble si besoin
 function squeeze() {
-  const s = $('sheet'); if (!s) return;
-  const steps = [[13, 34, 26], [11, 34, 26], [9, 30, 22], [8, 26, 18], [7, 22, 16], [6, 20, 14]];
-  for (const [g, pt, pb] of steps) {
-    s.style.gap = g + 'px'; s.style.paddingTop = pt + 'px'; s.style.paddingBottom = pb + 'px';
-    s.style.height = 'auto'; const h = s.scrollHeight; s.style.height = '';
-    if (h <= 1122) break;
+  const s = $('sheet'), inn = s && s.querySelector('.sh-in'); if (!inn) return;
+  inn.style.transform = ''; inn.style.width = '';
+  let need = 0, avail = 0;
+  for (const [g, pt, pb] of [[13, 34, 26], [11, 32, 24], [9, 28, 20]]) {
+    inn.style.gap = g + 'px'; s.style.paddingTop = pt + 'px'; s.style.paddingBottom = pb + 'px';
+    inn.style.minHeight = '0'; need = inn.scrollHeight; avail = 1122 - pt - pb;
+    if (need <= avail) break;
   }
+  if (need > avail) {
+    const k = avail / need;
+    inn.style.transform = `scale(${k})`; inn.style.width = (100 / k) + '%'; inn.style.minHeight = (avail / k) + 'px';
+  } else inn.style.minHeight = avail + 'px';
 }
 window.addEventListener('resize', fit);
 window.addEventListener('beforeprint', () => { const s = $('sheet'); if (s) s.style.transform = 'none'; });
