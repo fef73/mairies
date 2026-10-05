@@ -78,6 +78,8 @@
   .ext b{display:block;font-family:'Fraunces',serif;font-size:20px;font-weight:600;line-height:1.15;}
   .ext span{display:block;font-size:10.5px;color:var(--mute);}
   .ext small{display:block;font-size:10.5px;color:var(--ink);}
+  .ski-cap{font-size:11px;color:var(--mute);margin-top:3px;line-height:1.4;}
+  .ski-cap b{color:var(--ink);font-weight:600;}
   .local{background:var(--ac-soft);border-radius:10px;padding:10px 14px;}
   .local ul{margin:0;padding-left:16px;font-size:12px;line-height:1.5;}
   .local li::marker{color:var(--ac);}
@@ -125,7 +127,8 @@
       <div class="field"><label for="f-mention">Mention en pied de page</label>
         <input id="f-mention" type="text" placeholder="ex. Mairie de … · www.…" data-lpignore="true" data-1p-ignore data-form-type="other">
       </div>
-      <div class="field"><label class="check"><input type="checkbox" id="f-tour"> Ajouter « Quand venir » (communes touristiques)</label></div>
+      <div class="field"><label class="check"><input type="checkbox" id="f-tour"> Ajouter « Quand venir » (communes touristiques)</label>
+        <label class="check"><input type="checkbox" id="f-ski"> Station de ski : cumul de neige par saison depuis 1950</label></div>
       <div class="btns">
         <button class="btn" id="go" type="button">Générer</button>
         <button class="btn alt" id="print" type="button" disabled>PDF / Imprimer</button>
@@ -227,13 +230,18 @@ function analyse(D) {
     ['Jours de neige (≥ 1 cm)', i => ok(D.sn[i]) && D.sn[i] >= 1]
   ];
   R.periods = periods;
+
+  // Cumul de neige par saison (1er août → 31 juillet), saisons complètes
+  const sea = {};
+  for (let i = 0; i < n; i++) { const s = M[i] >= 7 ? Y[i] : Y[i] - 1; const o = sea[s] = sea[s] || { v: 0, n: 0 }; o.n++; if (ok(D.sn[i])) o.v += D.sn[i]; }
+  R.seas = Object.keys(sea).map(Number).filter(s => sea[s].n >= 360).sort((a, b) => a - b).map(s => ({ s, v: sea[s].v }));
   R.ind = defs.map(([label, f]) => ({ label, vals: periods.map(([a, b]) => { let c = 0; for (let i = 0; i < n; i++) if (Y[i] >= a && Y[i] <= b && f(i)) c++; return c / (b - a + 1); }) }));
   return R;
 }
 
 // ---------- Graphiques SVG ----------
-function climogram(R, ac) {
-  const W = 714, H = 196, L = 28, Rr = 30, T = 16, B = 22, pw = W - L - Rr, ph = H - T - B, bw = pw / 12;
+function climogram(R, ac, compact) {
+  const W = 714, H = compact ? 160 : 196, L = 28, Rr = 30, T = 16, B = 22, pw = W - L - Rr, ph = H - T - B, bw = pw / 12;
   const tmax = Math.max(...R.mon.map(m => m.tx)), tmin = Math.min(...R.mon.map(m => m.tn));
   const t0 = Math.floor((tmin - 3) / 5) * 5, t1 = Math.ceil((tmax + 3) / 5) * 5;
   const pmax = Math.max(60, Math.ceil(Math.max(...R.mon.map(m => m.pr)) / 20) * 20);
@@ -258,6 +266,37 @@ function stripes(R) {
   let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" preserveAspectRatio="none">`;
   R.annual.forEach((v, i) => { s += `<rect x="${(i * w).toFixed(2)}" y="0" width="${(w + .6).toFixed(2)}" height="${H}" fill="${col(v - base)}"/>`; });
   return s + '</svg>';
+}
+
+const seaLbl = s => `${s}-${String(s + 1).slice(2)}`;
+function snowChart(R, ac) {
+  const S = R.seas, W = 714, H = 100, L = 34, Rr = 24, T = 8, B = 15, pw = W - L - Rr, ph = H - T - B, n = S.length, bw = pw / n;
+  const vmax = Math.max(1, ...S.map(x => x.v));
+  const step = [10, 20, 50, 100, 200, 250, 500, 1000, 2000].find(st => vmax / st <= 4) || 2000, top = Math.ceil(vmax / step) * step;
+  const y = v => T + ph - v / top * ph;
+  const ref = mean(S.filter(x => x.s >= 1990 && x.s <= 2019).map(x => x.v));
+  const iMax = S.reduce((b, x, i) => x.v > S[b].v ? i : b, 0);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="IBM Plex Mono,monospace" font-size="9">`;
+  for (let v = 0; v <= top; v += step) s += `<line x1="${L}" x2="${W - Rr}" y1="${y(v)}" y2="${y(v)}" stroke="#e6ebf0"/><text x="${L - 5}" y="${y(v) + 3}" text-anchor="end" fill="#5d6b79">${v}</text>`;
+  s += `<text x="${W - Rr + 4}" y="${y(top) + 3}" fill="#5d6b79">cm</text>`;
+  S.forEach((x, i) => {
+    s += `<rect x="${(L + i * bw + bw * .12).toFixed(2)}" y="${y(x.v).toFixed(2)}" width="${(bw * .76).toFixed(2)}" height="${(T + ph - y(x.v)).toFixed(2)}" fill="${i === iMax ? ac : '#9ec3e6'}"/>`;
+    if (x.s % 10 === 0) s += `<text x="${L + i * bw + bw / 2}" y="${H - 3}" text-anchor="middle" fill="#5d6b79">${x.s}</text>`;
+  });
+  if (ref != null) s += `<line x1="${L}" x2="${W - Rr}" y1="${y(ref)}" y2="${y(ref)}" stroke="#5d6b79" stroke-dasharray="4 3"/>`;
+  const pts = S.map((x, i) => i < 9 ? null : `${(L + i * bw + bw / 2).toFixed(1)},${y(mean(S.slice(i - 9, i + 1).map(z => z.v))).toFixed(1)}`).filter(Boolean);
+  if (pts.length > 1) s += `<polyline points="${pts.join(' ')}" fill="none" stroke="#d4452d" stroke-width="2" stroke-linejoin="round"/>`;
+  return s + '</svg>';
+}
+function skiBlock(R, ac) {
+  const S = R.seas; if (!S || S.length < 10) return '';
+  const avg = (a, b) => mean(S.filter(x => x.s >= a && x.s <= b).map(x => x.v));
+  const last10 = S.slice(-10), hi = S.reduce((b, x) => x.v > b.v ? x : b), lo = S.reduce((b, x) => x.v < b.v ? x : b);
+  const m = v => v == null ? '—' : fr(v, 0) + ' cm';
+  return `<div class="sh-sec"><h3>Cumul de neige par saison · ${seaLbl(S[0].s)} → ${seaLbl(S[S.length - 1].s)}</h3>
+    ${snowChart(R, ac)}
+    <div class="ski-cap">Moyenne par saison : <b>${m(avg(1950, 1979))}</b> (1950-51 → 1979-80) · <b>${m(avg(1990, 2019))}</b> (1990-91 → 2019-20, pointillé) · <b>${m(mean(last10.map(x => x.v)))}</b> (10 dernières saisons).
+    Record <b>${m(hi.v)}</b> en ${seaLbl(hi.s)} · plus faible <b>${m(lo.v)}</b> en ${seaLbl(lo.s)}. <span style="color:#d4452d">Courbe rouge</span> : moyenne glissante sur 10 saisons.</div></div>`;
 }
 
 // ---------- Rendu de la fiche ----------
@@ -288,7 +327,7 @@ function render(p, R, alt, o) {
       <div class="tt"><div class="kicker">Fiche climat</div><h2>${esc(p.name)}</h2>
       <div class="meta">${esc([place, `altitude ${fr(alt, 0)} m`, p.population ? `${fr(p.population, 0)} habitants` : null].filter(Boolean).join(' · '))}</div></div></div>
     <div class="sh-sec"><h3>Le climat en un coup d'œil <span style="letter-spacing:0;text-transform:none;color:#5d6b79">· normales 1991–2020</span></h3>
-      ${climogram(R, o.color)}
+      ${climogram(R, o.color, o.ski)}
       <div class="kpis">
         <div class="kpi"><b>${fr(R.annT)} °C</b><span>température moyenne</span></div>
         <div class="kpi"><b>${fr(R.annPr, 0)} mm</b><span>de pluie et neige fondue par an</span></div>
@@ -306,6 +345,7 @@ function render(p, R, alt, o) {
       <div class="stripes-cap"><span>${R.years[0]}</span><span>bleu : plus frais que 1991–2020 · rouge : plus chaud</span><span>${R.lastFull}</span></div>
       <table class="ind"><tr><th>Jours par an en moyenne</th>${R.periods.map(([a, b]) => `<th>${a}–${b}</th>`).join('')}</tr>
         ${R.ind.map(r => `<tr><td>${r.label}</td>${r.vals.map(v => `<td>${fr(v, v < 10 ? 1 : 0)}</td>`).join('')}</tr>`).join('')}</table></div>
+    ${o.ski ? skiBlock(R, o.color) : ''}
     <div class="sh-sec"><h3>Les extrêmes depuis ${R.years[0]}</h3>
       <div class="ext">
         <div><span>Jour le plus chaud</span><b>${fr(R.hot.v)} °C</b><small>${dateFr(R.hot.d)}</small></div>
@@ -318,14 +358,22 @@ function render(p, R, alt, o) {
     <div class="sh-foot"><div>Sources : réanalyse ERA5 (Copernicus / ECMWF) via Open-Meteo, ${yrs} ; normales 1991–2020. Valeurs modélisées au point ${fr(p.lat, 3)}° N, ${fr(p.lon, 3)}° E à ${fr(alt, 0)} m : elles peuvent différer des mesures d'une station. Mise à jour du ${new Date().toLocaleDateString('fr-FR')}.</div>
       <div class="r">${o.mention ? `<div class="mention">${esc(o.mention)}</div>` : ''}Document informatif : ne remplace pas la vigilance Météo-France.<br>© ${new Date().getFullYear()} fef73</div></div>`;
   const wrap = $('wrap'); $('empty') && $('empty').remove(); if (!sheet.parentNode) wrap.appendChild(sheet);
-  fit();
+  squeeze(); fit();
 }
 function fit() {
   const wrap = $('wrap'), s = $('sheet'); if (!s) return;
   const k = Math.min(1, wrap.clientWidth / 794);
   s.style.transform = `scale(${k})`; wrap.style.height = Math.round(1122 * k) + 'px';
-  // si le contenu déborde, on resserre légèrement
-  s.style.setProperty('gap', '13px');
+}
+// si le contenu déborde de la page, on resserre les espacements
+function squeeze() {
+  const s = $('sheet'); if (!s) return;
+  const steps = [[13, 34, 26], [11, 34, 26], [9, 30, 22], [8, 26, 18], [7, 22, 16], [6, 20, 14]];
+  for (const [g, pt, pb] of steps) {
+    s.style.gap = g + 'px'; s.style.paddingTop = pt + 'px'; s.style.paddingBottom = pb + 'px';
+    s.style.height = 'auto'; const h = s.scrollHeight; s.style.height = '';
+    if (h <= 1122) break;
+  }
 }
 window.addEventListener('resize', fit);
 window.addEventListener('beforeprint', () => { const s = $('sheet'); if (s) s.style.transform = 'none'; });
@@ -364,7 +412,7 @@ $('f-size').addEventListener('change', () => {
   const a3 = $('f-size').value === 'A3';
   $('page-size').textContent = `@page { size: ${a3 ? 'A3' : 'A4'} portrait; margin: 0; }`;
 });
-['f-color', 'f-tour'].forEach(id => $(id).addEventListener('change', () => { if (current) $('go').click(); }));
+['f-color', 'f-tour', 'f-ski'].forEach(id => $(id).addEventListener('change', () => { if (current) $('go').click(); }));
 
 const cache = {};
 $('go').addEventListener('click', async () => {
@@ -380,7 +428,7 @@ $('go').addEventListener('click', async () => {
     const alt = elev != null ? elev : (D.elevation != null ? D.elevation : (chosen.elevation || 0));
     current = { chosen, R, alt };
     render({ name: chosen.name, admin1: chosen.admin1, admin2: chosen.admin2, population: chosen.population, lat: chosen.latitude, lon: chosen.longitude }, R, alt,
-      { color: $('f-color').value, mention: $('f-mention').value.trim(), tour: $('f-tour').checked });
+      { color: $('f-color').value, mention: $('f-mention').value.trim(), tour: $('f-tour').checked, ski: $('f-ski').checked });
     $('print').disabled = false; msg('Fiche prête.');
   } catch (e) { delete cache[`${chosen.latitude},${chosen.longitude},${elev}`]; msg('Impossible de récupérer les données. Réessayez dans un instant.', true); }
   $('go').disabled = false;
