@@ -191,7 +191,10 @@ function sha256(str) {
   return H.map(v => (v >>> 0).toString(16).padStart(8, '0')).join('');
 }
 const empreinte = pw => sha256('fef73:' + pw);
-function unlock() { document.body.classList.remove('locked'); try { sessionStorage.setItem('fc-ok', PASS_HASH); } catch (e) {} }
+function unlock() {
+  document.body.classList.remove('locked'); try { sessionStorage.setItem('fc-ok', PASS_HASH); } catch (e) {}
+  setTimeout(() => window.lancerParURL && window.lancerParURL());   // lancement par URL éventuel, une fois la page déverrouillée
+}
 try { if (sessionStorage.getItem('fc-ok') === PASS_HASH) unlock(); } catch (e) {}
 $('lock').addEventListener('submit', e => {
   e.preventDefault();
@@ -543,7 +546,7 @@ $('f-size').addEventListener('change', () => {
 ['f-color', 'f-tour', 'f-ski', 'f-air'].forEach(id => $(id).addEventListener('change', () => { if (current) $('go').click(); }));
 
 const cache = {}, airCache = {};
-$('go').addEventListener('click', async () => {
+async function generer() {
   if (!chosen) return msg('Choisissez la commune dans la liste proposée.', true);
   const altIn = $('f-alt').value.trim().replace(',', '.');
   let elev = null; if (altIn) { elev = parseFloat(altIn); if (!isFinite(elev) || elev < -400 || elev > 6000) return msg('Altitude invalide (en mètres).', true); }
@@ -563,11 +566,50 @@ $('go').addEventListener('click', async () => {
     render({ name: chosen.name, admin1: chosen.admin1, admin2: chosen.admin2, population: chosen.population, lat: chosen.latitude, lon: chosen.longitude }, R, alt,
       { color: $('f-color').value, mention: $('f-mention').value.trim(), tour: $('f-tour').checked, ski: $('f-ski').checked, air: $('f-air').checked, airData });
     $('print').disabled = false; msg('Fiche prête.');
-  } catch (e) { delete cache[`${chosen.latitude},${chosen.longitude},${elev}`]; msg('Impossible de récupérer les données. Réessayez dans un instant.', true); }
-  $('go').disabled = false;
-});
+  } catch (e) { delete cache[`${chosen.latitude},${chosen.longitude},${elev}`]; msg('Impossible de récupérer les données. Réessayez dans un instant.', true); $('go').disabled = false; return false; }
+  $('go').disabled = false; return true;
+}
+$('go').addEventListener('click', generer);
 $('f-mention').addEventListener('change', () => { if (current) $('go').click(); });
 $('print').addEventListener('click', () => { const s = $('sheet'); if (s) s.style.transform = 'none'; window.print(); });
+
+// ---------- Lancement par URL (« API ») ----------
+// La fiche peut être ouverte toute prête depuis une autre page, par exemple :
+//   ?insee=73248                                  commune par son code INSEE (position de la mairie)
+//   ?lat=45.2763&lon=6.3462&nom=Saint-Jean-de-Maurienne
+// Options : alt=1550 · air=1 · ski=1 · tour=1 · couleur=bleu|vert|bordeaux|ardoise · format=A3
+//           mention=Mairie%20de%20… · imprimer=1 (ouvre la fenêtre d'impression / PDF)
+// Le mot de passe reste demandé ; la fiche se génère dès que la page est déverrouillée.
+const COULEURS = { bleu: '#1d4e7a', vert: '#2f6b4f', bordeaux: '#8a2f3d', ardoise: '#3d4b5c' };
+let apiFait = false;
+window.lancerParURL = async () => {
+  const q = new URLSearchParams(location.search);
+  if (apiFait || !(q.get('insee') || (q.get('lat') && q.get('lon')))) return;
+  apiFait = true;
+  const oui = k => /^(1|oui|true)$/i.test(q.get(k) || '');
+  try {
+    msg('Lancement par lien…');
+    if (q.get('insee')) {
+      const c = await getJSON(`https://geo.api.gouv.fr/communes/${encodeURIComponent(q.get('insee'))}?fields=nom,code,centre,mairie,population,departement,region`);
+      const g = (c.mairie || c.centre).coordinates;
+      chosen = { name: q.get('nom') || c.nom, admin2: c.departement && c.departement.nom, admin1: c.region && c.region.nom, population: c.population, latitude: g[1], longitude: g[0] };
+    } else {
+      chosen = { name: q.get('nom') || q.get('ville') || 'Point choisi', admin2: q.get('dep') || null, admin1: q.get('region') || null,
+        population: +q.get('pop') || null, latitude: +q.get('lat'), longitude: +q.get('lon') };
+      if (!isFinite(chosen.latitude) || !isFinite(chosen.longitude)) throw new Error('coordonnées invalides');
+    }
+    $('f-place').value = [chosen.name, chosen.admin2, chosen.admin1].filter(Boolean).join(', ');
+    $('f-alt').value = q.get('alt') || '';
+    $('f-air').checked = oui('air'); $('f-ski').checked = oui('ski'); $('f-tour').checked = oui('tour');
+    const col = (q.get('couleur') || '').toLowerCase(), hex = COULEURS[col] || (/^#?[0-9a-f]{6}$/i.test(col) ? '#' + col.replace('#', '') : null);
+    if (hex) { if (![...$('f-color').options].some(o => o.value === hex)) $('f-color').add(new Option('Personnalisée', hex)); $('f-color').value = hex; }
+    if (q.get('mention')) $('f-mention').value = q.get('mention');
+    if (/^a3$/i.test(q.get('format') || '')) { $('f-size').value = 'A3'; $('f-size').dispatchEvent(new Event('change')); }
+    const fait = await generer();
+    if (fait && oui('imprimer')) setTimeout(() => $('print').click(), 800);
+  } catch (e) { msg('Lien incomplet ou commune introuvable : ' + e.message, true); }
+};
+if (!document.body.classList.contains('locked')) window.lancerParURL();
 </script>
 </body>
 </html>
